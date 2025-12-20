@@ -55,6 +55,9 @@ async function main() {
     const rawUserIkaCoins = rawUserCoins.data.filter((coin) => coin.coinType === testnetIkaCoinType);
     const rawUserSuiCoins = rawUserCoins.data.filter((coin) => coin.coinType === '0x2::sui::SUI');
     // const rawUserIkaCoins = rawUserCoins.data.filter() //some filtering logic inside it
+    if (!rawUserIkaCoins[0] || !rawUserSuiCoins[0]) {
+        throw new Error('Missing required coins');
+    }
     const userIkaCoin = tx.object(rawUserIkaCoins[0].coinObjectId); // User's IKA coin object ID
     const userSuiCoin = tx.object(rawUserSuiCoins[0].coinObjectId); // User's SUI coin object ID
     
