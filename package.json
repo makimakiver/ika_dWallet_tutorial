@@ -1,0 +1,21 @@
+{
+  "name": "ika_sdk",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@ika.xyz/sdk": "/Users/makimakiver/ika/sdk/typescript/dist",
+    "@mysten/bcs": "^1.9.2",
+    "@mysten/sui": "^1.44.0",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3"
+  }
+}
