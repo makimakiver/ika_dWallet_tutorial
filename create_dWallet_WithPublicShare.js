@@ -101,16 +101,16 @@ function retryWithBackoff(fn_1) {
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var rootSeedKey, tx, userShareKeys, ikaTx, rawUserCoins, rawUserIkaCoins, rawUserSuiCoins, userIkaCoin, userSuiCoin, sessionId, dWalletEncryptionKey, dkgRequestInput, sessionIdentifier, _a, dwalletCap, sign_ID, txJSON, result, waitForTransactionResult;
+        var rootSeedKey, tx, userShareKeys, ikaTx, rawUserCoins, rawUserIkaCoins, rawUserSuiCoins, userIkaCoin, userSuiCoin, sessionId, dWalletEncryptionKey, dkgRequestInput, sessionIdentifier, dwalletCap, txJSON, result, waitForTransactionResult;
         var _this = this;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        return __generator(this, function (_a) {
+            switch (_a.label) {
                 case 0: 
                 // Add delay before initialization to avoid concurrent requests
                 return [4 /*yield*/, delay(500)];
                 case 1:
                     // Add delay before initialization to avoid concurrent requests
-                    _b.sent();
+                    _a.sent();
                     return [4 /*yield*/, retryWithBackoff(function () { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 switch (_a.label) {
@@ -122,13 +122,13 @@ function main() {
                             });
                         }); })];
                 case 2:
-                    _b.sent();
+                    _a.sent();
                     rootSeedKey = new Uint8Array(32);
                     crypto.getRandomValues(rootSeedKey);
                     tx = new transactions_1.Transaction();
                     return [4 /*yield*/, sdk_1.UserShareEncryptionKeys.fromRootSeedKey(rootSeedKey, sdk_1.Curve.SECP256K1)];
                 case 3:
-                    userShareKeys = _b.sent();
+                    userShareKeys = _a.sent();
                     ikaTx = new sdk_1.IkaTransaction({
                         ikaClient: ikaClient,
                         transaction: tx,
@@ -138,7 +138,7 @@ function main() {
                             owner: senderAddress
                         })];
                 case 4:
-                    rawUserCoins = _b.sent();
+                    rawUserCoins = _a.sent();
                     console.log(rawUserCoins);
                     rawUserIkaCoins = rawUserCoins.data.filter(function (coin) { return coin.coinType === testnetIkaCoinType; });
                     rawUserSuiCoins = rawUserCoins.data.filter(function (coin) { return coin.coinType === '0x2::sui::SUI'; });
@@ -155,40 +155,38 @@ function main() {
                         })];
                 case 5:
                     // Register an encryption key before the DKG, or if you did already you can skip this step
-                    _b.sent();
+                    _a.sent();
                     return [4 /*yield*/, ikaClient.getLatestNetworkEncryptionKey()];
                 case 6:
-                    dWalletEncryptionKey = _b.sent();
+                    dWalletEncryptionKey = _a.sent();
                     return [4 /*yield*/, (0, sdk_1.prepareDKGAsync)(ikaClient, sdk_1.Curve.SECP256K1, userShareKeys, sessionId, senderAddress)];
                 case 7:
-                    dkgRequestInput = _b.sent();
+                    dkgRequestInput = _a.sent();
                     sessionIdentifier = ikaTx.createSessionIdentifier();
                     console.log("dWalletNetworkEncryptionKeyId: ", dWalletEncryptionKey.id);
-                    return [4 /*yield*/, ikaTx.requestDWalletDKG({
-                            dkgRequestInput: dkgRequestInput,
+                    return [4 /*yield*/, ikaTx.requestDWalletDKGWithPublicUserShare({
                             sessionIdentifier: sessionIdentifier,
                             dwalletNetworkEncryptionKeyId: dWalletEncryptionKey.id, // id of dWalletEncryptionKey is the network encryption key ID
                             curve: sdk_1.Curve.SECP256K1, // or Curve.SECP256R1, Curve.ED25519, etc.
+                            publicKeyShareAndProof: dkgRequestInput.userDKGMessage, // userDKGMessage contains the public key share and proof
+                            publicUserSecretKeyShare: dkgRequestInput.userSecretKeyShare, // Use the secret key share directly (public in this flow)
+                            userPublicOutput: dkgRequestInput.userPublicOutput,
                             ikaCoin: userIkaCoin,
                             suiCoin: userSuiCoin
                         })];
                 case 8:
-                    _a = _b.sent(), dwalletCap = _a[0], sign_ID = _a[1];
+                    dwalletCap = (_a.sent())[0];
                     tx.transferObjects([dwalletCap], senderAddress);
-                    // Note: The remaining balance from suiCoin after splitCoins is automatically returned
-                    // No need to transfer userSuiCoinRemaining as splitCoins consumes the original coin
-                    // tx.transferObjects([userSuiCoin], senderAddress);
-                    tx.setSender(senderAddress);
                     return [4 /*yield*/, tx.toJSON()];
                 case 9:
-                    txJSON = _b.sent();
+                    txJSON = _a.sent();
                     console.log("txJSON: ", txJSON);
                     return [4 /*yield*/, client.signAndExecuteTransaction({ signer: keypair, transaction: tx })];
                 case 10:
-                    result = _b.sent();
+                    result = _a.sent();
                     return [4 /*yield*/, client.waitForTransaction({ digest: result.digest })];
                 case 11:
-                    waitForTransactionResult = _b.sent();
+                    waitForTransactionResult = _a.sent();
                     console.log("waitForTransactionResult: ", waitForTransactionResult);
                     return [2 /*return*/];
             }

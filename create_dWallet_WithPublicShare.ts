@@ -112,11 +112,18 @@ async function main() {
     );
     const sessionIdentifier = ikaTx.createSessionIdentifier();
     console.log("dWalletNetworkEncryptionKeyId: ", dWalletEncryptionKey.id);
-    const [dwalletCap, sign_ID] = await ikaTx.requestDWalletDKG({
-        dkgRequestInput: dkgRequestInput,
+    // prepareDKGAsync returns fields for requestDWalletDKG (encrypted shares)
+    // For requestDWalletDKGWithPublicUserShare, we need to map the fields:
+    // - publicKeyShareAndProof comes from userDKGMessage (contains public key share and proof)
+    // - publicUserSecretKeyShare comes from userSecretKeyShare (the secret share, made public in this flow)
+    // - userPublicOutput is available directly
+    const [dwalletCap] = await ikaTx.requestDWalletDKGWithPublicUserShare({
         sessionIdentifier,
         dwalletNetworkEncryptionKeyId: dWalletEncryptionKey.id, // id of dWalletEncryptionKey is the network encryption key ID
         curve: Curve.SECP256K1, // or Curve.SECP256R1, Curve.ED25519, etc.
+        publicKeyShareAndProof: dkgRequestInput.userDKGMessage, // userDKGMessage contains the public key share and proof
+        publicUserSecretKeyShare: dkgRequestInput.userSecretKeyShare, // Use the secret key share directly (public in this flow)
+        userPublicOutput: dkgRequestInput.userPublicOutput,
         ikaCoin: userIkaCoin,
         suiCoin: userSuiCoin
     });  
@@ -124,7 +131,7 @@ async function main() {
     // Note: The remaining balance from suiCoin after splitCoins is automatically returned
     // No need to transfer userSuiCoinRemaining as splitCoins consumes the original coin
     // tx.transferObjects([userSuiCoin], senderAddress);
-    tx.setSender(senderAddress);
+    // tx.setSender(senderAddress);
     const txJSON = await tx.toJSON();
     console.log("txJSON: ", txJSON);
     const result = await client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
