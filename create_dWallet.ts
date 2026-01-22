@@ -110,11 +110,11 @@ async function main() {
         sessionId,
         senderAddress,
     );
-    const sessionIdentifier = ikaTx.createSessionIdentifier();
-    console.log("dWalletNetworkEncryptionKeyId: ", dWalletEncryptionKey.id);
+    // const sessionIdentifier = ikaTx.createSessionIdentifier();
+    console.log("sessionId: ", sessionId);
     const [dwalletCap, sign_ID] = await ikaTx.requestDWalletDKG({
         dkgRequestInput: dkgRequestInput,
-        sessionIdentifier,
+        sessionIdentifier: ikaTx.registerSessionIdentifier(sessionId),
         dwalletNetworkEncryptionKeyId: dWalletEncryptionKey.id, // id of dWalletEncryptionKey is the network encryption key ID
         curve: Curve.SECP256K1, // or Curve.SECP256R1, Curve.ED25519, etc.
         ikaCoin: userIkaCoin,
@@ -126,10 +126,12 @@ async function main() {
     // tx.transferObjects([userSuiCoin], senderAddress);
     tx.setSender(senderAddress);
     const txJSON = await tx.toJSON();
-    console.log("txJSON: ", txJSON);
+    // console.log("txJSON: ", txJSON);
     const result = await client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
     const waitForTransactionResult = await client.waitForTransaction({ digest: result.digest });
     console.log("waitForTransactionResult: ", waitForTransactionResult);
+    console.log("sessionId: ", sessionId);
+    console.log("rootSeedKey: ", rootSeedKey);
 }
 
 // Execute main with retry logic to avoid concurrency and rate limiting issues

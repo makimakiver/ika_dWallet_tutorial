@@ -41,15 +41,18 @@ var sdk_1 = require("@ika.xyz/sdk");
 var transactions_1 = require("@mysten/sui/transactions");
 var ed25519_1 = require("@mysten/sui/keypairs/ed25519");
 var dotenv = require("dotenv");
+// import coordinator_inner = require('../ika/sdk/typescript/dist/esm/generated/ika_dwallet_2pc_mpc/coordinator_inner');
 dotenv.config();
 var PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
-if (!PRIVATE_KEY) {
-    throw new Error('SUI_PRIVATE_KEY is not set');
+var ROOT_SEED_KEY = process.env.ROOT_SEED_KEY;
+if (!PRIVATE_KEY || !ROOT_SEED_KEY) {
+    throw new Error('SUI_PRIVATE_KEY or ROOT_SEED_KEY is not set');
 }
 var keypair = ed25519_1.Ed25519Keypair.fromSecretKey(PRIVATE_KEY);
 var client = new client_1.SuiClient({ url: (0, client_1.getFullnodeUrl)('testnet') }); // mainnet / testnet
 var senderAddress = "0x854ec4225b6fa32572f50e622147ef6cf3c6eaa390f6b9c100afa3f1ae76291d";
 var testnetIkaCoinType = '0x1f26bb2f711ff82dcda4d02c77d5123089cb7f8418751474b9fb744ce031526a::ika::IKA';
+var dWalletObjectID = '0xd2872e32f6652551631ae798e1ab552cb61b839711016382f47ca7a87e7949e7';
 var ikaClient = new sdk_1.IkaClient({
     suiClient: client,
     config: (0, sdk_1.getNetworkConfig)('testnet'), // mainnet / testnet
@@ -101,16 +104,19 @@ function retryWithBackoff(fn_1) {
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var rootSeedKey, tx, userShareKeys, ikaTx, rawUserCoins, rawUserIkaCoins, rawUserSuiCoins, userIkaCoin, userSuiCoin, sessionId, dWalletEncryptionKey, dkgRequestInput, _a, dwalletCap, sign_ID, txJSON, result, waitForTransactionResult;
+        var tx, userShareKeys, ikaTx, rawUserCoins, rawUserIkaCoins, rawUserSuiCoins, userIkaCoin, userSuiCoin, sessionId, dWalletEncryptionKey, dWallet, unverifiedPresignCap, verifiedPresignCap, txJSON, result, waitForTransactionResult;
         var _this = this;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
-                case 0: 
-                // Add delay before initialization to avoid concurrent requests
-                return [4 /*yield*/, delay(500)];
-                case 1:
+        var _a, _b;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
+                case 0:
+                    console.log('[Step 1] Starting presign creation process...');
                     // Add delay before initialization to avoid concurrent requests
-                    _b.sent();
+                    console.log('[Step 2] Adding initial delay (500ms)...');
+                    return [4 /*yield*/, delay(500)];
+                case 1:
+                    _c.sent();
+                    console.log('[Step 3] Initializing Ika Client...');
                     return [4 /*yield*/, retryWithBackoff(function () { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 switch (_a.label) {
@@ -122,82 +128,129 @@ function main() {
                             });
                         }); })];
                 case 2:
-                    _b.sent();
-                    rootSeedKey = new Uint8Array(32);
-                    crypto.getRandomValues(rootSeedKey);
+                    _c.sent();
+                    console.log('[Step 3] Ika Client initialized successfully');
                     tx = new transactions_1.Transaction();
-                    return [4 /*yield*/, sdk_1.UserShareEncryptionKeys.fromRootSeedKey(rootSeedKey, sdk_1.Curve.SECP256K1)];
+                    return [4 /*yield*/, sdk_1.UserShareEncryptionKeys.fromRootSeedKey(ROOT_SEED_KEY, sdk_1.Curve.SECP256K1)];
                 case 3:
-                    userShareKeys = _b.sent();
+                    userShareKeys = _c.sent();
+                    console.log('[Step 5] UserShareEncryptionKeys created');
                     ikaTx = new sdk_1.IkaTransaction({
                         ikaClient: ikaClient,
                         transaction: tx,
                         userShareEncryptionKeys: userShareKeys
                     });
+                    // Get user's IKA coin and SUI coin for transaction fees
+                    console.log('[Step 6] Fetching user coins...');
                     return [4 /*yield*/, client.getAllCoins({
                             owner: senderAddress
                         })];
                 case 4:
-                    rawUserCoins = _b.sent();
-                    console.log(rawUserCoins);
+                    rawUserCoins = _c.sent();
+                    console.log("[Step 6] Total coins found: ".concat(rawUserCoins.data.length));
                     rawUserIkaCoins = rawUserCoins.data.filter(function (coin) { return coin.coinType === testnetIkaCoinType; });
                     rawUserSuiCoins = rawUserCoins.data.filter(function (coin) { return coin.coinType === '0x2::sui::SUI'; });
+                    console.log("[Step 6] IKA coins found: ".concat(rawUserIkaCoins.length));
+                    console.log("[Step 6] SUI coins found: ".concat(rawUserSuiCoins.length));
                     // const rawUserIkaCoins = rawUserCoins.data.filter() //some filtering logic inside it
                     if (!rawUserIkaCoins[0] || !rawUserSuiCoins[1]) {
                         throw new Error('Missing required coins');
                     }
                     userIkaCoin = tx.object(rawUserIkaCoins[0].coinObjectId);
                     userSuiCoin = tx.object(rawUserSuiCoins[1].coinObjectId);
+                    console.log("[Step 6] Using IKA coin: ".concat(rawUserIkaCoins[0].coinObjectId));
+                    console.log("[Step 6] Using SUI coin: ".concat(rawUserSuiCoins[1].coinObjectId));
+                    // Create session identifier
+                    console.log('[Step 7] Creating session identifier...');
                     sessionId = (0, sdk_1.createRandomSessionIdentifier)();
+                    console.log("[Step 7] Session ID created: ".concat(Buffer.from(sessionId).toString('hex').substring(0, 16), "..."));
                     // Register an encryption key before the DKG, or if you did already you can skip this step
+                    console.log('[Step 8] Registering encryption key...');
                     return [4 /*yield*/, ikaTx.registerEncryptionKey({
                             curve: sdk_1.Curve.SECP256K1,
                         })];
                 case 5:
-                    // Register an encryption key before the DKG, or if you did already you can skip this step
-                    _b.sent();
+                    _c.sent();
+                    console.log('[Step 8] Encryption key registered');
+                    console.log('[Step 9] Fetching latest network encryption key...');
                     return [4 /*yield*/, ikaClient.getLatestNetworkEncryptionKey()];
                 case 6:
-                    dWalletEncryptionKey = _b.sent();
-                    return [4 /*yield*/, (0, sdk_1.prepareDKGAsync)(ikaClient, sdk_1.Curve.SECP256K1, userShareKeys, sessionId, senderAddress)];
-                case 7:
-                    dkgRequestInput = _b.sent();
+                    dWalletEncryptionKey = _c.sent();
+                    console.log("[Step 9] dWalletNetworkEncryptionKeyId: ".concat(dWalletEncryptionKey.id));
+                    // console.log('[Step 11] Creating session identifier for transaction...');
                     // const sessionIdentifier = ikaTx.createSessionIdentifier();
-                    console.log("sessionId: ", sessionId);
-                    return [4 /*yield*/, ikaTx.requestDWalletDKG({
-                            dkgRequestInput: dkgRequestInput,
-                            sessionIdentifier: ikaTx.registerSessionIdentifier(sessionId),
-                            dwalletNetworkEncryptionKeyId: dWalletEncryptionKey.id, // id of dWalletEncryptionKey is the network encryption key ID
-                            curve: sdk_1.Curve.SECP256K1, // or Curve.SECP256R1, Curve.ED25519, etc.
-                            ikaCoin: userIkaCoin,
-                            suiCoin: userSuiCoin
+                    // console.log(`[Step 11] Session identifier created: ${sessionIdentifier}`);
+                    console.log("[Step 12] Fetching dWallet: ".concat(dWalletObjectID, "..."));
+                    return [4 /*yield*/, retryWithBackoff(function () { return __awaiter(_this, void 0, void 0, function () {
+                            return __generator(this, function (_a) {
+                                switch (_a.label) {
+                                    case 0: return [4 /*yield*/, ikaClient.getDWallet(dWalletObjectID)];
+                                    case 1: return [2 /*return*/, _a.sent()];
+                                }
+                            });
+                        }); })];
+                case 7:
+                    dWallet = _c.sent();
+                    console.log("[Step 12] dWallet fetched. State: ".concat(((_a = dWallet.state) === null || _a === void 0 ? void 0 : _a.$kind) || 'unknown'));
+                    console.log('[Step 13] Accepting encrypted user share...');
+                    return [4 /*yield*/, ikaTx.acceptEncryptedUserShare({
+                            dWallet: dWallet,
+                            encryptedUserSecretKeyShareId: '0xec70774ee390c9acf7270cc47f288263fea2db91d20bb3bcc6ce96af5be6cb9f',
+                            userPublicOutput: new Uint8Array((_b = dWallet.state.AwaitingKeyHolderSignature) === null || _b === void 0 ? void 0 : _b.public_output),
                         })];
                 case 8:
-                    _a = _b.sent(), dwalletCap = _a[0], sign_ID = _a[1];
-                    tx.transferObjects([dwalletCap], senderAddress);
-                    // Note: The remaining balance from suiCoin after splitCoins is automatically returned
-                    // No need to transfer userSuiCoinRemaining as splitCoins consumes the original coin
-                    // tx.transferObjects([userSuiCoin], senderAddress);
-                    tx.setSender(senderAddress);
-                    return [4 /*yield*/, tx.toJSON()];
+                    _c.sent();
+                    console.log('[Step 13] Encrypted user share accepted');
+                    console.log('[Step 14] Requesting presign with ECDSASecp256k1 algorithm...');
+                    return [4 /*yield*/, ikaTx.requestPresign({
+                            dWallet: dWallet, // Use the fetched DWallet object with state
+                            signatureAlgorithm: sdk_1.SignatureAlgorithm.ECDSASecp256k1,
+                            ikaCoin: userIkaCoin,
+                            suiCoin: tx.splitCoins(tx.gas, [1000000]),
+                        })];
                 case 9:
-                    txJSON = _b.sent();
-                    return [4 /*yield*/, client.signAndExecuteTransaction({ signer: keypair, transaction: tx })];
+                    unverifiedPresignCap = _c.sent();
+                    console.log("[Step 14] Unverified presign cap created: ".concat(unverifiedPresignCap.$kind));
+                    console.log('[Step 15] Verifying presign cap...');
+                    return [4 /*yield*/, ikaTx.verifyPresignCap({
+                            presign: unverifiedPresignCap, // <-- Directly by providing an object or object ID string
+                        })];
                 case 10:
-                    result = _b.sent();
-                    return [4 /*yield*/, client.waitForTransaction({ digest: result.digest })];
+                    verifiedPresignCap = _c.sent();
+                    console.log("[Step 15] Verified presign cap: ".concat(verifiedPresignCap.$kind));
+                    console.log('[Step 16] Transferring verified presign cap to sender...');
+                    tx.transferObjects([verifiedPresignCap], senderAddress);
+                    console.log('[Step 16] Transfer added to transaction');
+                    console.log('[Step 17] Setting transaction sender...');
+                    tx.setSender(senderAddress);
+                    console.log("[Step 17] Sender set: ".concat(senderAddress));
+                    console.log('[Step 18] Converting transaction to JSON...');
+                    return [4 /*yield*/, tx.toJSON()];
                 case 11:
-                    waitForTransactionResult = _b.sent();
-                    console.log("waitForTransactionResult: ", waitForTransactionResult);
-                    console.log("sessionIdentifier: ", sessionIdentifier);
-                    console.log("rootSeedKey: ", rootSeedKey);
+                    txJSON = _c.sent();
+                    console.log('[Step 18] Transaction JSON prepared');
+                    console.log('[Step 19] Signing and executing transaction...');
+                    return [4 /*yield*/, client.signAndExecuteTransaction({ signer: keypair, transaction: tx })];
+                case 12:
+                    result = _c.sent();
+                    console.log("[Step 19] Transaction executed. Digest: ".concat(result.digest));
+                    console.log('[Step 20] Waiting for transaction confirmation...');
+                    return [4 /*yield*/, client.waitForTransaction({ digest: result.digest })];
+                case 13:
+                    waitForTransactionResult = _c.sent();
+                    console.log('[Step 20] Transaction confirmed!');
+                    console.log('[Step 21] Transaction result:', JSON.stringify(waitForTransactionResult, null, 2));
+                    console.log('[Step 21] Presign creation process completed successfully!');
                     return [2 /*return*/];
             }
         });
     });
 }
 // Execute main with retry logic to avoid concurrency and rate limiting issues
+console.log('[Step 0] Starting presign creation script...');
 retryWithBackoff(main, 5, 2000).catch(function (error) {
-    console.error('Error in main:', error);
+    console.error('[ERROR] Error in main:', error);
+    console.error('[ERROR] Stack trace:', error.stack);
     process.exit(1);
 });
+// ZeroTrust DWallet with unencrypted shares
