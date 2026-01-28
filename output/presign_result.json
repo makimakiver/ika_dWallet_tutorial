@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-01-28T18:32:39.472Z",
+  "transactionDigest": "2TrJGSGD4jKVMoMeGfUyyzMjVV8X61huMcfvwkVwPdBK",
+  "presignId": "0x7dcfceb79182011296a836278108d1f0def16a8ed1b3cc5ac493efcae7d972f2",
+  "presignCapId": "0x1919d22cf36a1012e0e9bdaaebfe1dcbf0801cabb48037b0eaf863f6d8df68f6",
+  "dWalletObjectID": "0x78fe2a616ac5cc6a3b361d0e45b3f5373a8dba37001f2d95809818107f258b72",
+  "curve": "SECP256K1",
+  "signatureAlgorithm": "ECDSASecp256k1"
+}

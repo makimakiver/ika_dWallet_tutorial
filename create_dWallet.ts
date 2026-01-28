@@ -15,6 +15,8 @@ import {
 import { Transaction, type TransactionObjectArgument } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 dotenv.config();
 
 const PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
@@ -111,6 +113,8 @@ async function main() {
         senderAddress,
     );
     // const sessionIdentifier = ikaTx.createSessionIdentifier();
+    
+    // process.exit(0);
     console.log("sessionId: ", sessionId);
     const [dwalletCap, sign_ID] = await ikaTx.requestDWalletDKG({
         dkgRequestInput: dkgRequestInput,
@@ -132,6 +136,54 @@ async function main() {
     console.log("waitForTransactionResult: ", waitForTransactionResult);
     console.log("sessionId: ", sessionId);
     console.log("rootSeedKey: ", rootSeedKey);
+    console.log("dkgRequestInput: ", dkgRequestInput.userPublicOutput);
+    
+    // Extract dWallet object ID from transaction result
+    let dWalletObjectID: string | undefined;
+    if (waitForTransactionResult.objectChanges) {
+        // Look for the dWallet object in objectChanges
+        const dWalletChange = waitForTransactionResult.objectChanges.find(
+            (change: any) => 
+                (change.type === 'created' || change.type === 'mutated') &&
+                (change.objectType?.includes('DWallet') || change.objectType?.includes('dwallet'))
+        );
+        if (dWalletChange) {
+            dWalletObjectID = dWalletChange.objectId;
+        }
+    }
+    
+    // If not found in objectChanges, try to get it from the dwalletCap
+    if (!dWalletObjectID && dwalletCap) {
+        // The dwalletCap might have the dWallet ID, or we need to query it
+        // For now, we'll need to extract it from the transaction effects
+        console.log("Warning: Could not extract dWalletObjectID from transaction result");
+    }
+    
+    // Store results in a file
+    console.log("Saving results to file...");
+    const resultData = {
+        timestamp: new Date().toISOString(),
+        transactionDigest: result.digest,
+        waitForTransactionResult: waitForTransactionResult,
+        sessionId: sessionId,
+        rootSeedKey: rootSeedKey,
+        dkgRequestInput: {
+            userPublicOutput: dkgRequestInput.userPublicOutput,
+        },
+        senderAddress: senderAddress,
+        dWalletNetworkEncryptionKeyId: dWalletEncryptionKey.id,
+        dWalletObjectID: dWalletObjectID,
+    };
+    
+    const outputDir = path.join(process.cwd(), 'output');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    const filename = `dwallet_result_${Date.now()}.json`;
+    const filepath = path.join(outputDir, filename);
+    fs.writeFileSync(filepath, JSON.stringify(resultData, null, 2), 'utf-8');
+    console.log(`Results saved to: ${filepath}`);
 }
 
 // Execute main with retry logic to avoid concurrency and rate limiting issues

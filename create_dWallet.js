@@ -41,6 +41,8 @@ var sdk_1 = require("@ika.xyz/sdk");
 var transactions_1 = require("@mysten/sui/transactions");
 var ed25519_1 = require("@mysten/sui/keypairs/ed25519");
 var dotenv = require("dotenv");
+var fs = require("fs");
+var path = require("path");
 dotenv.config();
 var PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
 if (!PRIVATE_KEY) {
@@ -101,7 +103,7 @@ function retryWithBackoff(fn_1) {
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var rootSeedKey, tx, userShareKeys, ikaTx, rawUserCoins, rawUserIkaCoins, rawUserSuiCoins, userIkaCoin, userSuiCoin, sessionId, dWalletEncryptionKey, dkgRequestInput, _a, dwalletCap, sign_ID, txJSON, result, waitForTransactionResult;
+        var rootSeedKey, tx, userShareKeys, ikaTx, rawUserCoins, rawUserIkaCoins, rawUserSuiCoins, userIkaCoin, userSuiCoin, sessionId, dWalletEncryptionKey, dkgRequestInput, _a, dwalletCap, sign_ID, txJSON, result, waitForTransactionResult, dWalletObjectID, dWalletChange, resultData, outputDir, filename, filepath;
         var _this = this;
         return __generator(this, function (_b) {
             switch (_b.label) {
@@ -163,6 +165,7 @@ function main() {
                 case 7:
                     dkgRequestInput = _b.sent();
                     // const sessionIdentifier = ikaTx.createSessionIdentifier();
+                    // process.exit(0);
                     console.log("sessionId: ", sessionId);
                     return [4 /*yield*/, ikaTx.requestDWalletDKG({
                             dkgRequestInput: dkgRequestInput,
@@ -189,8 +192,48 @@ function main() {
                 case 11:
                     waitForTransactionResult = _b.sent();
                     console.log("waitForTransactionResult: ", waitForTransactionResult);
-                    console.log("sessionIdentifier: ", sessionIdentifier);
+                    console.log("sessionId: ", sessionId);
                     console.log("rootSeedKey: ", rootSeedKey);
+                    console.log("dkgRequestInput: ", dkgRequestInput.userPublicOutput);
+                    if (waitForTransactionResult.objectChanges) {
+                        dWalletChange = waitForTransactionResult.objectChanges.find(function (change) {
+                            var _a, _b;
+                            return (change.type === 'created' || change.type === 'mutated') &&
+                                (((_a = change.objectType) === null || _a === void 0 ? void 0 : _a.includes('DWallet')) || ((_b = change.objectType) === null || _b === void 0 ? void 0 : _b.includes('dwallet')));
+                        });
+                        if (dWalletChange) {
+                            dWalletObjectID = dWalletChange.objectId;
+                        }
+                    }
+                    // If not found in objectChanges, try to get it from the dwalletCap
+                    if (!dWalletObjectID && dwalletCap) {
+                        // The dwalletCap might have the dWallet ID, or we need to query it
+                        // For now, we'll need to extract it from the transaction effects
+                        console.log("Warning: Could not extract dWalletObjectID from transaction result");
+                    }
+                    // Store results in a file
+                    console.log("Saving results to file...");
+                    resultData = {
+                        timestamp: new Date().toISOString(),
+                        transactionDigest: result.digest,
+                        waitForTransactionResult: waitForTransactionResult,
+                        sessionId: sessionId,
+                        rootSeedKey: rootSeedKey,
+                        dkgRequestInput: {
+                            userPublicOutput: dkgRequestInput.userPublicOutput,
+                        },
+                        senderAddress: senderAddress,
+                        dWalletNetworkEncryptionKeyId: dWalletEncryptionKey.id,
+                        dWalletObjectID: dWalletObjectID,
+                    };
+                    outputDir = path.join(process.cwd(), 'output');
+                    if (!fs.existsSync(outputDir)) {
+                        fs.mkdirSync(outputDir, { recursive: true });
+                    }
+                    filename = "dwallet_result_".concat(Date.now(), ".json");
+                    filepath = path.join(outputDir, filename);
+                    fs.writeFileSync(filepath, JSON.stringify(resultData, null, 2), 'utf-8');
+                    console.log("Results saved to: ".concat(filepath));
                     return [2 /*return*/];
             }
         });

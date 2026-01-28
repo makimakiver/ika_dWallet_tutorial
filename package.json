@@ -13,7 +13,7 @@
     "@types/node": "^25.0.8"
   },
   "dependencies": {
-    "@ika.xyz/sdk": "file:../ika/sdk/typescript",
+    "@ika.xyz/sdk": "file:../ika/sdk/typescript", 
     "@mysten/sui": "^1.45.2",
     "dotenv": "^17.2.3"
   }
