@@ -10,8 +10,8 @@ pnpm install
 2. Create a `.env` file in the root directory:
 ```env
 SUI_PRIVATE_KEY=your_private_key_here
-SUI_RPC_URL=https://fullnode.testnet.sui.io:443
 ⚠️ The public rpc url has some issues with rate limiting so it is recommended to use some other rpc url: like shinami rpc old fashion:)
+SUI_RPC_URL=https://fullnode.testnet.sui.io:443
 ```
 
 ## Commands
