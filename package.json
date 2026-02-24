@@ -1,20 +1,30 @@
 {
-  "name": "ika_acc_management",
+  "name": "compact",
   "version": "1.0.0",
   "description": "",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "create-dWallet": "tsx src/Ika_Setup/create_dWallet.ts",
+    "create-presign": "tsx src/Ika_Setup/create_Presign.ts",
+    "activate-dWallet": "tsx src/Ika_Setup/activate_dWallet.ts"
   },
   "devDependencies": {
-    "@types/node": "^25.0.8"
+    "@types/node": "^25.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@ika.xyz/sdk": "file:../ika/sdk/typescript", 
-    "@mysten/sui": "^1.45.2",
-    "dotenv": "^17.2.3"
+    "@ika.xyz/sdk": "0.2.7",
+    "@mysten/sui": "^2.5.0",
+    "dotenv": "^17.3.1",
+    "fs": "0.0.1-security",
+    "path": "^0.12.7",
+    "zod": "^4.3.6"
   }
 }
