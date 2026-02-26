@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains private keys!)
+.env
+.env.local
+
+# Output files (contain sensitive dWallet/presign data)
+output/
+
+# TypeScript build output
+dist/
+*.js.map
+*.d.ts.map
+
+# pnpm
+.pnpm-store/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

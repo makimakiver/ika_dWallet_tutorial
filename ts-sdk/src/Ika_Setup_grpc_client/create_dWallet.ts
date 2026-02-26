@@ -1,0 +1,210 @@
+import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import {
+  getNetworkConfig,
+  UserShareEncryptionKeys,
+  createRandomSessionIdentifier,
+  Curve,
+  prepareDKGAsync,
+  IkaTransaction,
+  IkaClient,
+} from "@ika.xyz/sdk";
+import {
+  Transaction,
+  type TransactionObjectArgument,
+} from "@mysten/sui/transactions";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import * as dotenv from "dotenv";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
+import { ENV } from "../helper/env.js";
+
+const PRIVATE_KEY = ENV.SUI_PRIVATE_KEY;
+if (!PRIVATE_KEY) {
+  throw new Error("SUI_PRIVATE_KEY is not set");
+}
+const keypair = Ed25519Keypair.fromSecretKey(PRIVATE_KEY);
+const client = new SuiGrpcClient({
+  network: "testnet",
+  baseUrl: "https://fullnode.testnet.sui.io:443",
+});
+const senderAddress =
+  "0x854ec4225b6fa32572f50e622147ef6cf3c6eaa390f6b9c100afa3f1ae76291d";
+const testnetIkaCoinType =
+  "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x1f26bb2f711ff82dcda4d02c77d5123089cb7f8418751474b9fb744ce031526a::ika::IKA>";
+const suiCoinType =
+  "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>";
+// Note: Type assertion needed due to @ika.xyz/sdk using @mysten/sui v1.x internally
+
+const ikaClient = new IkaClient({
+  suiClient: client,
+  config: getNetworkConfig("testnet"), // mainnet / testnet
+});
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry function with exponential backoff to avoid rate limiting
+ *
+ * @param fn - The function to retry
+ * @param maxRetries - The maximum number of retries
+ * @param initialDelay - The initial delay in milliseconds
+ * @returns The result of the function
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 5,
+  initialDelay: number = 1000,
+): Promise<T> {
+  let lastError: Error;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      // Check if it's a rate limit error (429 or -32010)
+      const isRateLimit =
+        error?.cause?.status === 429 ||
+        error?.status === 429 ||
+        error?.cause?.code === -32010 ||
+        error?.cause?.code === "RESOURCE_EXHAUSTED" ||
+        error?.message?.includes("Too many requests") ||
+        error?.message?.toLowerCase().includes("too many requests");
+      if (isRateLimit) {
+        const delayMs = 15000; // Increased delay for rate limiting
+        console.log(
+          `Rate limit hit. Retrying in ${delayMs}ms... (attempt ${attempt + 1}/${maxRetries})`,
+        );
+        await delay(delayMs);
+      } else {
+        // For other errors, throw immediately
+        throw error;
+      }
+    }
+  }
+  throw lastError!;
+}
+
+/**
+ * Creates a dWallet for the sender address
+ *
+ * 1. Initializes the Ika Client
+ * 2. Creates UserShareEncryptionKeys from randomnised seed key
+ * 3. Creates a new PTB
+ * 5. Gets user's IKA coin and SUI coin for transaction fees
+ * 6. Creates a random session identifier
+ * 7. Registers an encryption key
+ * 8. Prepares DKG data using prepareDKGAsync
+ * 9. Requests a dWallet DKG (distributed key generation)
+ * 10. Transfers the dWallet cap to the sender address
+ * 11. Executes the transaction
+ * 12. Saves the results to a json file (dwallet_result.json)
+ */
+async function createDWallet() {
+  await retryWithBackoff(async () => {
+    await ikaClient.initialize();
+  });
+
+  const rootSeedKey = new Uint8Array(32);
+  crypto.getRandomValues(rootSeedKey);
+  const userShareKeys = await UserShareEncryptionKeys.fromRootSeedKey(
+    rootSeedKey,
+    Curve.ED25519,
+  );
+
+  const tx = new Transaction();
+  const ikaTx = new IkaTransaction({
+    ikaClient,
+    transaction: tx,
+    userShareEncryptionKeys: userShareKeys,
+  });
+
+  const rawUserCoins = await client.core.listOwnedObjects({
+    owner: senderAddress,
+    type: "0x2::coin::Coin",
+  });
+  console.log(rawUserCoins);
+  const rawUserIkaCoins = rawUserCoins.objects.filter(
+    (coin) => coin.type === testnetIkaCoinType,
+  );
+  const rawUserSuiCoins = rawUserCoins.objects.filter(
+    (coin) => coin.type === suiCoinType,
+  );
+  if (!rawUserIkaCoins[0] || !rawUserSuiCoins[0]) {
+    throw new Error("Missing required coins");
+  }
+  const userIkaCoin = tx.object(rawUserIkaCoins[0].objectId); // User's IKA coin object ID
+  const userSuiCoin = tx.object(rawUserSuiCoins[0].objectId); // User's SUI coin object ID
+
+  const sessionId = createRandomSessionIdentifier();
+
+  await ikaTx.registerEncryptionKey({
+    curve: Curve.ED25519,
+  });
+
+  const dWalletEncryptionKey = await retryWithBackoff(async () => {
+    return await ikaClient.getLatestNetworkEncryptionKey();
+  });
+
+  const dkgRequestInput = await retryWithBackoff(async () => {
+    return await prepareDKGAsync(
+      ikaClient,
+      Curve.ED25519,
+      userShareKeys,
+      sessionId,
+      senderAddress,
+    );
+  });
+
+  const [dwalletCap, _sign_ID] = await ikaTx.requestDWalletDKG({
+    dkgRequestInput: dkgRequestInput,
+    sessionIdentifier: ikaTx.registerSessionIdentifier(sessionId),
+    dwalletNetworkEncryptionKeyId: dWalletEncryptionKey.id, // id of dWalletEncryptionKey is the network encryption key ID
+    curve: Curve.ED25519, // or Curve.SECP256R1, Curve.ED25519, etc.
+    ikaCoin: userIkaCoin,
+    suiCoin: userSuiCoin,
+  });
+
+  tx.transferObjects([dwalletCap as TransactionObjectArgument], senderAddress);
+  tx.setSender(senderAddress);
+
+  // Sign and execute the transaction
+  const result = await client.signAndExecuteTransaction({
+    signer: keypair,
+    transaction: tx,
+  });
+  const waitForTransactionResult = await client.waitForTransaction({
+    digest: result.Transaction?.digest as string,
+  });
+
+  const resultData = {
+    timestamp: new Date().toISOString(),
+    transactionDigest: result.Transaction?.digest as string,
+    waitForTransactionResult: waitForTransactionResult,
+    sessionId: sessionId,
+    rootSeedKey: rootSeedKey,
+    dkgRequestInput: {
+      userPublicOutput: dkgRequestInput.userPublicOutput,
+    },
+    senderAddress: senderAddress,
+    dWalletNetworkEncryptionKeyId: dWalletEncryptionKey.id,
+    dWalletObjectID: "",
+  };
+  const outputDir = path.join(process.cwd(), "output");
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  const filename = `dwallet_result.json`;
+  const filepath = path.join(outputDir, filename);
+  fs.writeFileSync(filepath, JSON.stringify(resultData, null, 2), "utf-8");
+  console.log(`Results saved to: ${filepath}`);
+}
+
+// Execute main with retry logic to avoid concurrency and rate limiting issues
+retryWithBackoff(createDWallet, 5, 2000).catch((error) => {
+  console.error("Error in main:", error);
+  process.exit(1);
+});

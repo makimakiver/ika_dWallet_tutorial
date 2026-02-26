@@ -1,0 +1,34 @@
+{
+  "name": "compact",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest --config jest.config.ts",
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "create-dWallet": "tsx src/Ika_Setup/create_dWallet.ts",
+    "g-create-dWallet": "tsx src/Ika_Setup_grpc_client/create_dWallet.ts",
+    "create-presign": "tsx src/Ika_Setup/create_Presign.ts",
+    "activate-dWallet": "tsx src/Ika_Setup/activate_dWallet.ts"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.3.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@ika.xyz/sdk": "^0.2.7",
+    "@mysten/sui": "^2.5.0",
+    "dotenv": "^17.3.1",
+    "fs": "0.0.1-security",
+    "path": "^0.12.7",
+    "zod": "^4.3.6"
+  }
+}
